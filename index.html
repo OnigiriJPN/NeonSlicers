@@ -109,7 +109,12 @@
     const DB_NAME = 'NeonSlicerDB';
     const DB_VERSION = 1;
     let dbInstance = null;
+    let IsEnableLeaveWarn = true
+    window.addEventListener('beforeunload', function(e){
+      if (!IsEnableLeaveWarn) return;
 
+      e.preventDefault();
+    });
     function initDB() {
       return new Promise((resolve, reject) => {
         const request = indexedDB.open(DB_NAME, DB_VERSION);
@@ -471,7 +476,7 @@
 
     async function gameOver() {
       gameState = 'GAMEOVER';
-      
+      IsEnableLeaveWarn = false;
       let isNewRecord = false;
       if (score > bestScore) {
         bestScore = score;
