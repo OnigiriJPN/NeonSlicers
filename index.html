@@ -1,30 +1,481 @@
 <!DOCTYPE html>
 <html lang="ja" class="dark">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover" />
-    <title>ネオン・スライサー(Neon Slicer)</title>
-      <script src="https://cdn.tailwindcss.com"></script>
-      <script>
-        tailwind.config = {
-          darkMode: 'class',
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>ネオン・スライサー (Neon Slicer)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+    }
+  </script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
+  <style>
+    body, html {
+      touch-action: none;
+      overflow: hidden;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+  </style>
+</head>
+<body class="bg-slate-100 dark:bg-slate-950 text-slate-800 dark:text-white font-sans h-screen w-screen flex flex-col justify-between items-center relative transition-colors duration-300">
+
+  <!-- テーマ切り替え & UI ヘッダー -->
+  <header id="game-ui" class="absolute top-0 left-0 right-0 p-4 flex justify-between items-center z-20 pointer-events-none">
+    <div class="flex flex-col">
+      <span class="text-xs text-cyan-600 dark:text-cyan-400 font-bold uppercase tracking-widest">スコア</span>
+      <span id="score-val" class="text-2xl md:text-3xl font-extrabold text-cyan-500 dark:text-cyan-300 drop-shadow-[0_0_8px_rgba(6,182,212,0.6)]">0</span>
+    </div>
+
+    <!-- テーマ切替スイッチ（インタラクティブ） -->
+    <div class="pointer-events-auto bg-slate-200/80 dark:bg-slate-900/80 backdrop-blur border border-slate-300 dark:border-slate-800 p-1 rounded-full flex gap-1 shadow-md">
+      <button id="theme-system" title="システム設定に合わせる" class="p-1.5 rounded-full text-xs transition-all hover:bg-slate-300 dark:hover:bg-slate-800">💻</button>
+      <button id="theme-light" title="ライトモード" class="p-1.5 rounded-full text-xs transition-all hover:bg-slate-300 dark:hover:bg-slate-800">☀️</button>
+      <button id="theme-dark" title="ダークモード" class="p-1.5 rounded-full text-xs transition-all hover:bg-slate-300 dark:hover:bg-slate-800">🌙</button>
+    </div>
+
+    <div class="flex flex-col items-end">
+      <span class="text-xs text-rose-500 dark:text-rose-400 font-bold uppercase tracking-widest">Lives</span>
+      <div id="lives-val" class="text-xl md:text-2xl font-bold text-rose-500 tracking-widest">♥♥♥</div>
+    </div>
+  </header>
+
+  <!-- 実績解除ポップアップ -->
+  <div id="achievement-toast" class="absolute top-16 right-4 bg-white/90 dark:bg-slate-900/90 border border-amber-500/50 p-3 rounded-lg shadow-lg z-30 flex items-center gap-3 transition-all transform translate-x-72 opacity-0 pointer-events-none">
+    <div class="text-2xl">🏆</div>
+    <div>
+      <div class="text-xs text-amber-500 font-bold uppercase">実績解除！</div>
+      <div id="achievement-title" class="text-sm font-bold text-slate-800 dark:text-white">タイトル</div>
+    </div>
+  </div>
+
+  <!-- 1. スタート画面 -->
+  <div id="start-modal" class="absolute inset-0 bg-slate-100/90 dark:bg-slate-950/90 backdrop-blur-md flex flex-col justify-center items-center z-30 p-6 text-center">
+    <h1 class="text-4xl md:text-6xl font-black italic tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-pink-500 via-purple-500 to-cyan-400 mb-4 drop-shadow-sm">
+      NEON SLICER
+    </h1>
+    <p id="controls-hint" class="text-slate-600 dark:text-cyan-300 text-sm md:text-base mb-6 max-w-sm">
+      スワイプ / ドラッグしてネオンコアを斬り刻め！<br>
+      <span class="text-rose-500 font-bold">※ 赤い爆弾を切ると即ゲームオーバー</span>
+    </p>
+    <div class="mb-6 bg-slate-200/80 dark:bg-slate-900/80 p-4 rounded-xl border border-slate-300 dark:border-slate-800 text-xs text-slate-600 dark:text-gray-400 max-w-xs text-left shadow-sm">
+      <div class="font-bold text-amber-500 mb-1 text-center">🏆 実績リスト (IndexedDB保存)</div>
+      ・ 初陣（コアを1個切断）<br>
+      ・ 100点達成 / 300点達成<br>
+      ・ 危機一髪（爆弾をスルー）
+    </div>
+    <button id="start-btn" class="px-10 py-4 bg-gradient-to-r from-pink-500 to-cyan-500 text-white rounded-full font-black text-xl shadow-lg hover:scale-105 active:scale-95 transition-all cursor-pointer pointer-events-auto">
+      ゲームを開始する
+    </button>
+  </div>
+
+  <!-- 2. ゲームオーバー画面 -->
+  <div id="game-over-modal" class="absolute inset-0 bg-slate-100/90 dark:bg-slate-950/90 backdrop-blur-md flex flex-col justify-center items-center z-30 hidden p-6">
+    <h2 class="text-4xl md:text-5xl font-black text-rose-500 mb-2 drop-shadow-sm animate-pulse">
+      GAME OVER
+    </h2>
+    <div class="text-center my-4">
+      <p class="text-slate-500 dark:text-gray-400 text-sm">FINAL SCORE</p>
+      <p id="final-score" class="text-4xl font-extrabold text-cyan-500 dark:text-cyan-400 my-1">0</p>
+      <p id="new-record-tag" class="text-xs text-amber-500 font-bold uppercase tracking-widest hidden">🎉 NEW HIGH SCORE! 🎉</p>
+    </div>
+    <button id="restart-btn" class="px-8 py-3 bg-gradient-to-r from-pink-500 to-cyan-500 text-white rounded-full font-extrabold text-lg shadow-lg hover:scale-105 active:scale-95 transition-all cursor-pointer pointer-events-auto">
+      リスタート
+    </button>
+  </div>
+
+  <!-- p5.js キャンバス -->
+  <main id="canvas-container" class="w-full h-full flex justify-center items-center"></main>
+
+  <script>
+    // --- IndexedDB モジュール ---
+    const DB_NAME = 'NeonSlicerDB';
+    const DB_VERSION = 1;
+    let dbInstance = null;
+
+    function initDB() {
+      return new Promise((resolve, reject) => {
+        const request = indexedDB.open(DB_NAME, DB_VERSION);
+        request.onupgradeneeded = (e) => {
+          const db = e.target.result;
+          if (!db.objectStoreNames.contains('gameData')) {
+            db.createObjectStore('gameData', { keyPath: 'key' });
+          }
+        };
+        request.onsuccess = (e) => { dbInstance = e.target.result; resolve(dbInstance); };
+        request.onerror = (e) => reject(e.target.error);
+      });
+    }
+
+    async function getDBValue(key, defaultValue) {
+      if (!dbInstance) await initDB();
+      return new Promise((resolve) => {
+        const tx = dbInstance.transaction('gameData', 'readonly');
+        const store = tx.objectStore('gameData');
+        const req = store.get(key);
+        req.onsuccess = () => resolve(req.result ? req.result.value : defaultValue);
+        req.onerror = () => resolve(defaultValue);
+      });
+    }
+
+    async function setDBValue(key, value) {
+      if (!dbInstance) await initDB();
+      return new Promise((resolve, reject) => {
+        const tx = dbInstance.transaction('gameData', 'readwrite');
+        const store = tx.objectStore('gameData');
+        const req = store.put({ key: key, value: value });
+        req.onsuccess = () => resolve(true);
+        req.onerror = (e) => reject(e.target.error);
+      });
+    }
+
+    // --- テーマ制御機能 ---
+    let currentTheme = 'system'; // 'system', 'light', 'dark'
+
+    async function initTheme() {
+      currentTheme = await getDBValue('theme_setting', 'system');
+      applyTheme(currentTheme);
+
+      document.getElementById('theme-system').addEventListener('click', () => setTheme('system'));
+      document.getElementById('theme-light').addEventListener('click', () => setTheme('light'));
+      document.getElementById('theme-dark').addEventListener('click', () => setTheme('dark'));
+
+      // OSのテーマ変更を監視
+      window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+        if (currentTheme === 'system') applyTheme('system');
+      });
+    }
+
+    async function setTheme(mode) {
+      currentTheme = mode;
+      await setDBValue('theme_setting', mode);
+      applyTheme(mode);
+    }
+
+    function applyTheme(mode) {
+      const html = document.documentElement;
+      const isDarkOS = window.matchMedia('(prefers-color-scheme: dark)').matches;
+
+      if (mode === 'dark' || (mode === 'system' && isDarkOS)) {
+        html.classList.add('dark');
+      } else {
+        html.classList.remove('dark');
+      }
+
+      // ボタンの見た目を更新
+      ['system', 'light', 'dark'].forEach(m => {
+        const btn = document.getElementById(`theme-${m}`);
+        if (m === mode) {
+          btn.classList.add('bg-cyan-500', 'text-white');
+          btn.classList.remove('hover:bg-slate-300', 'dark:hover:bg-slate-800');
+        } else {
+          btn.classList.remove('bg-cyan-500', 'text-white');
+          btn.classList.add('hover:bg-slate-300', 'dark:hover:bg-slate-800');
         }
-      </script>
-      <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
-      <style>
-        body, html {
-          touch-action: none;
-          overflow: hidden;
-          user-select: none; /* iOS以外 */
-          -webkit-user-select: none; /* IOS専用 */
+      });
+    }
+
+    // --- ゲーム本体処理 ---
+    let score = 0;
+    let bestScore = 0;
+    let lives = 3;
+    let gameState = 'START';
+
+    let targets = [];
+    let particles = [];
+    let sliceTrail = [];
+    let isMobile = false;
+
+    const achievements = {
+      firstBlood: { unlocked: false, title: "初陣（初めての切断）" },
+      score100:   { unlocked: false, title: "ネオンハンター（100点到達）" },
+      score300:   { unlocked: false, title: "ネオンマスター（300点到達）" },
+      bombEvaded: { unlocked: false, title: "危機一髪（爆弾をスルー）" }
+    };
+
+    async function setup() {
+      const container = document.getElementById('canvas-container');
+      const canvas = createCanvas(container.clientWidth, container.clientHeight);
+      canvas.parent(container);
+
+      await initTheme();
+
+      bestScore = await getDBValue('highScore', 0);
+      const savedAchievements = await getDBValue('achievements', {});
+      for (let k in savedAchievements) {
+        if (achievements[k]) achievements[k].unlocked = savedAchievements[k];
+      }
+
+      isMobile = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+      if (!isMobile) noCursor();
+
+      document.getElementById('start-btn').addEventListener('click', startGame);
+      document.getElementById('restart-btn').addEventListener('click', startGame);
+
+      if (!isMobile) {
+        document.getElementById('controls-hint').innerHTML = 'マウスをドラッグしてネオンコアを切り裂け！<br><span class="text-rose-500 font-bold">※ 赤い爆弾を切ると即ゲームオーバー</span>';
+      }
+
+      frameRate(60);
+    }
+
+    function draw() {
+      // テーマに応じたキャンバス背景色の変更（ライト/ダーク）
+      const isDark = document.documentElement.classList.contains('dark');
+      if (isDark) {
+        background(15, 23, 42, 120); // 暗い背景
+      } else {
+        background(241, 245, 249, 120); // 明るい背景
+      }
+
+      if (gameState === 'PLAYING') {
+        if (frameCount % 45 === 0) spawnTarget();
+
+        updateAndDrawTrail();
+
+        for (let i = targets.length - 1; i >= 0; i--) {
+          let t = targets[i];
+          t.update();
+          t.display();
+
+          if ((mouseIsPressed || isMobile) && sliceTrail.length > 1) {
+            let lastPoint = sliceTrail[sliceTrail.length - 1];
+            let prevPoint = sliceTrail[sliceTrail.length - 2];
+            if (t.isSliced(prevPoint, lastPoint)) {
+              handleSlice(t, i);
+              continue;
+            }
+          }
+
+          if (t.y > height + 50) {
+            if (t.isBomb) {
+              unlockAchievement('bombEvaded');
+            } else if (!t.sliced) {
+              loseLife();
+            }
+            targets.splice(i, 1);
+          }
         }
-      </style>
-  </head>
-  <body class="bg-slate-100 dark:bg-slate-950 text-slate-800 dark:text-white font-sans h-screen w-screen flex flex-col justify-between">
-    <header id="game-ui" class="absolute top-0 left-0 right-0 p-4 flex justify-between items-center z-20 pointer-events-none">
-      <div class="flex flex-col">
-        <span class="text-xs text-cyan-600 dark:text-cyan-400 font-bold uppercase tracking-widest">スコア</span>
-      </div>
-    </header>
-  </body>
+
+        for (let i = particles.length - 1; i >= 0; i--) {
+          particles[i].update();
+          particles[i].display();
+          if (particles[i].alpha <= 0) particles.splice(i, 1);
+        }
+      }
+
+      if (!isMobile && gameState !== 'GAMEOVER') drawCustomCursor();
+    }
+
+    function handleSlice(target, index) {
+      if (target.isBomb) {
+        createExplosion(target.x, target.y, color(255, 50, 50), 40);
+        gameOver();
+      } else {
+        target.sliced = true;
+        score += 10;
+        unlockAchievement('firstBlood');
+        if (score >= 100) unlockAchievement('score100');
+        if (score >= 300) unlockAchievement('score300');
+
+        updateUI();
+        createExplosion(target.x, target.y, target.color, 20);
+        targets.splice(index, 1);
+      }
+    }
+
+    function loseLife() {
+      lives--;
+      updateUI();
+      if (lives <= 0) gameOver();
+    }
+
+    async function unlockAchievement(key) {
+      if (achievements[key] && !achievements[key].unlocked) {
+        achievements[key].unlocked = true;
+        showToast(achievements[key].title);
+
+        const statusMap = {};
+        for (let k in achievements) statusMap[k] = achievements[k].unlocked;
+        await setDBValue('achievements', statusMap);
+      }
+    }
+
+    function showToast(title) {
+      const toast = document.getElementById('achievement-toast');
+      document.getElementById('achievement-title').innerText = title;
+      toast.classList.remove('translate-x-72', 'opacity-0');
+      toast.classList.add('translate-x-0', 'opacity-100');
+
+      setTimeout(() => {
+        toast.classList.remove('translate-x-0', 'opacity-100');
+        toast.classList.add('translate-x-72', 'opacity-0');
+      }, 3000);
+    }
+
+    function updateAndDrawTrail() {
+      if (mouseIsPressed || (isMobile && touches.length > 0)) {
+        sliceTrail.push({ x: mouseX, y: mouseY, alpha: 255 });
+      }
+
+      for (let i = sliceTrail.length - 1; i >= 0; i--) {
+        sliceTrail[i].alpha -= 18;
+        if (sliceTrail[i].alpha <= 0) sliceTrail.splice(i, 1);
+      }
+
+      noFill();
+      strokeWeight(6);
+      beginShape();
+      for (let p of sliceTrail) {
+        stroke(6, 182, 212, p.alpha);
+        vertex(p.x, p.y);
+      }
+      endShape();
+    }
+
+    function drawCustomCursor() {
+      push();
+      translate(mouseX, mouseY);
+      noStroke();
+      fill(236, 72, 153, 200);
+      ellipse(0, 0, 12, 12);
+      fill(255, 255, 255, 255);
+      ellipse(0, 0, 6, 6);
+      pop();
+    }
+
+    class Target {
+      constructor() {
+        this.x = random(width * 0.15, width * 0.85);
+        this.y = height + 30;
+        this.vx = random(-3, 3);
+        this.vy = random(-14, -18);
+        this.gravity = 0.38;
+        this.size = random(40, 55);
+        this.isBomb = random(1) < 0.22;
+        this.color = this.isBomb ? color(239, 68, 68) : color(random([ '#06b6d4', '#ec4899', '#a855f7', '#10b981' ]));
+        this.sliced = false;
+        this.rotation = 0;
+        this.vRot = random(-0.1, 0.1);
+      }
+
+      update() {
+        this.x += this.vx;
+        this.y += this.vy;
+        this.vy += this.gravity;
+        this.rotation += this.vRot;
+      }
+
+      display() {
+        push();
+        translate(this.x, this.y);
+        rotate(this.rotation);
+
+        if (this.isBomb) {
+          fill(30);
+          stroke(239, 68, 68);
+          strokeWeight(3);
+          ellipse(0, 0, this.size, this.size);
+          stroke(245, 158, 11);
+          line(0, -this.size/2, 5, -this.size/2 - 10);
+        } else {
+          fill(this.color);
+          stroke(255);
+          strokeWeight(2);
+          rectMode(CENTER);
+          rect(0, 0, this.size, this.size, 8);
+        }
+        pop();
+      }
+
+      isSliced(p1, p2) {
+        if (!p1 || !p2) return false;
+        let d = distToSegment({x: this.x, y: this.y}, p1, p2);
+        return d < this.size / 2;
+      }
+    }
+
+    class Particle {
+      constructor(x, y, col) {
+        this.x = x;
+        this.y = y;
+        this.vx = random(-6, 6);
+        this.vy = random(-6, 6);
+        this.size = random(4, 8);
+        this.color = col;
+        this.alpha = 255;
+      }
+      update() {
+        this.x += this.vx;
+        this.y += this.vy;
+        this.alpha -= 8;
+      }
+      display() {
+        push();
+        noStroke();
+        fill(red(this.color), green(this.color), blue(this.color), this.alpha);
+        ellipse(this.x, this.y, this.size);
+        pop();
+      }
+    }
+
+    function createExplosion(x, y, col, count) {
+      for (let i = 0; i < count; i++) particles.push(new Particle(x, y, col));
+    }
+
+    function spawnTarget() { targets.push(new Target()); }
+
+    function distToSegment(p, v, w) {
+      let l2 = (w.x - v.x)**2 + (w.y - v.y)**2;
+      if (l2 === 0) return dist(p.x, p.y, v.x, v.y);
+      let t = ((p.x - v.x) * (w.x - v.x) + (p.y - v.y) * (w.y - v.y)) / l2;
+      t = Math.max(0, Math.min(1, t));
+      return dist(p.x, p.y, v.x + t * (w.x - v.x), v.y + t * (w.y - v.y));
+    }
+
+    function updateUI() {
+      document.getElementById('score-val').innerText = score;
+      document.getElementById('lives-val').innerText = '♥'.repeat(Math.max(0, lives));
+    }
+
+    function startGame() {
+      score = 0;
+      lives = 3;
+      gameState = 'PLAYING';
+      targets = [];
+      particles = [];
+      sliceTrail = [];
+      updateUI();
+
+      document.getElementById('start-modal').classList.add('hidden');
+      document.getElementById('game-over-modal').classList.add('hidden');
+      document.getElementById('game-ui').classList.remove('hidden');
+    }
+
+    async function gameOver() {
+      gameState = 'GAMEOVER';
+      
+      let isNewRecord = false;
+      if (score > bestScore) {
+        bestScore = score;
+        await setDBValue('highScore', bestScore);
+        isNewRecord = true;
+      }
+
+      document.getElementById('final-score').innerText = score;
+      const tag = document.getElementById('new-record-tag');
+      if (isNewRecord) tag.classList.remove('hidden');
+      else tag.classList.add('hidden');
+
+      document.getElementById('game-over-modal').classList.remove('hidden');
+    }
+
+    function windowResized() {
+      const container = document.getElementById('canvas-container');
+      resizeCanvas(container.clientWidth, container.clientHeight);
+    }
+  </script>
+</body>
 </html>
